@@ -48,9 +48,10 @@ export default function Home() {
     const status = getStatus(dias);
 
     return (
-      <TouchableOpacity
-        style={[styles.card, { backgroundColor: status.card, borderColor: status.borda }]}
-      >
+ <TouchableOpacity
+  style={[styles.card, { backgroundColor: status.card, borderColor: status.borda }]}
+  onPress={() => router.push(`/${item.id}`)}
+>
         <View style={styles.cardInfo}>
           <Text style={styles.cardNome}>{item.nome}</Text>
           <Text style={styles.cardMeta}>
