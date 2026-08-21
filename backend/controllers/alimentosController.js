@@ -1,18 +1,35 @@
 const pool = require('../config/database');
 
+// Query base com JOIN para trazer o nome da categoria
+const SELECT_BASE = `
+  SELECT
+    a.id,
+    a.nome,
+    a.categoria_id,
+    c.nome AS categoria,
+    c.icone AS categoria_icone,
+    a.quantidade,
+    a.unidade,
+    a.data_validade,
+    a.local_armazenamento,
+    a.criado_em
+  FROM alimentos a
+  INNER JOIN categorias c ON a.categoria_id = c.id
+`;
+
 // Listar todos os alimentos
 exports.listar = async (req, res) => {
   try {
     const { categoria } = req.query;
-    let query = 'SELECT * FROM alimentos';
+    let query = SELECT_BASE;
     const params = [];
 
     if (categoria) {
-      query += ' WHERE categoria = $1';
+      query += ' WHERE c.nome = $1';
       params.push(categoria);
     }
 
-    query += ' ORDER BY data_validade ASC';
+    query += ' ORDER BY a.data_validade ASC';
 
     const result = await pool.query(query, params);
     res.json(result.rows);
@@ -25,7 +42,7 @@ exports.listar = async (req, res) => {
 exports.buscarPorId = async (req, res) => {
   try {
     const { id } = req.params;
-    const result = await pool.query('SELECT * FROM alimentos WHERE id = $1', [id]);
+    const result = await pool.query(SELECT_BASE + ' WHERE a.id = $1', [id]);
 
     if (result.rows.length === 0) {
       return res.status(404).json({ erro: 'Alimento não encontrado' });
@@ -37,22 +54,37 @@ exports.buscarPorId = async (req, res) => {
   }
 };
 
+// Resolve o id da categoria a partir do nome ou do proprio id
+const resolverCategoriaId = async (categoria, categoria_id) => {
+  if (categoria_id) return categoria_id;
+  if (!categoria) return null;
+
+  const result = await pool.query('SELECT id FROM categorias WHERE nome = $1', [categoria]);
+  return result.rows.length > 0 ? result.rows[0].id : null;
+};
+
 // Cadastrar alimento
 exports.criar = async (req, res) => {
   try {
-    const { nome, categoria, quantidade, unidade, data_validade, local_armazenamento } = req.body;
+    const { nome, categoria, categoria_id, quantidade, unidade, data_validade, local_armazenamento } = req.body;
 
-    if (!nome || !categoria || !quantidade || !unidade || !data_validade) {
+    if (!nome || !quantidade || !unidade || !data_validade) {
       return res.status(400).json({ erro: 'Preencha todos os campos obrigatórios' });
     }
 
+    const catId = await resolverCategoriaId(categoria, categoria_id);
+    if (!catId) {
+      return res.status(400).json({ erro: 'Categoria inválida ou não informada' });
+    }
+
     const result = await pool.query(
-      `INSERT INTO alimentos (nome, categoria, quantidade, unidade, data_validade, local_armazenamento)
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-      [nome, categoria, quantidade, unidade, data_validade, local_armazenamento]
+      `INSERT INTO alimentos (nome, categoria_id, quantidade, unidade, data_validade, local_armazenamento)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+      [nome, catId, quantidade, unidade, data_validade, local_armazenamento]
     );
 
-    res.status(201).json(result.rows[0]);
+    const novo = await pool.query(SELECT_BASE + ' WHERE a.id = $1', [result.rows[0].id]);
+    res.status(201).json(novo.rows[0]);
   } catch (err) {
     res.status(500).json({ erro: err.message });
   }
@@ -62,21 +94,27 @@ exports.criar = async (req, res) => {
 exports.atualizar = async (req, res) => {
   try {
     const { id } = req.params;
-    const { nome, categoria, quantidade, unidade, data_validade, local_armazenamento } = req.body;
+    const { nome, categoria, categoria_id, quantidade, unidade, data_validade, local_armazenamento } = req.body;
+
+    const catId = await resolverCategoriaId(categoria, categoria_id);
+    if (!catId) {
+      return res.status(400).json({ erro: 'Categoria inválida ou não informada' });
+    }
 
     const result = await pool.query(
       `UPDATE alimentos
-       SET nome = $1, categoria = $2, quantidade = $3, unidade = $4,
+       SET nome = $1, categoria_id = $2, quantidade = $3, unidade = $4,
            data_validade = $5, local_armazenamento = $6
-       WHERE id = $7 RETURNING *`,
-      [nome, categoria, quantidade, unidade, data_validade, local_armazenamento, id]
+       WHERE id = $7 RETURNING id`,
+      [nome, catId, quantidade, unidade, data_validade, local_armazenamento, id]
     );
 
     if (result.rows.length === 0) {
       return res.status(404).json({ erro: 'Alimento não encontrado' });
     }
 
-    res.json(result.rows[0]);
+    const atualizado = await pool.query(SELECT_BASE + ' WHERE a.id = $1', [id]);
+    res.json(atualizado.rows[0]);
   } catch (err) {
     res.status(500).json({ erro: err.message });
   }
