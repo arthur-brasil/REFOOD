@@ -43,16 +43,16 @@ Uma User Story é considerada **pronta** quando:
 
 ## 📊 Status do Sprint
 
-Sprint de 1 mês · 23 Story Points
+Sprint de 1 mês · 23 Story Points · **Concluído**
 
-| ID | User Story | Status |
-|----|-----------|--------|
-| US-01 | Cadastrar alimento | ✅ Concluído |
-| US-02 | Listar alimentos com filtros e badges | ✅ Concluído |
-| US-03 | Editar alimento | ✅ Concluído |
-| US-04 | Excluir alimento | ✅ Concluído |
-| US-05 | Atualizar data de validade | ✅ Concluído |
-| US-06 | Alertas visuais de vencimento | 🔄 Em andamento |
+| ID | User Story | SP | Status |
+|----|-----------|----|--------|
+| US-01 | Cadastrar alimento | 8 | ✅ Concluído |
+| US-02 | Listar alimentos com filtros e badges | 5 | ✅ Concluído |
+| US-03 | Editar alimento | 3 | ✅ Concluído |
+| US-04 | Excluir alimento | 2 | ✅ Concluído |
+| US-05 | Atualizar data de validade | 2 | ✅ Concluído |
+| US-06 | Alertas visuais de vencimento | 3 | ✅ Concluído |
 
 ---
 
@@ -67,6 +67,17 @@ CATEGORIAS ||--o{ ALIMENTOS : classifica
 - Uma **categoria** classifica zero ou muitos **alimentos**
 - Um **alimento** pertence a exatamente uma **categoria**
 - A restrição `ON DELETE RESTRICT` impede a exclusão de categorias que possuam alimentos vinculados, garantindo integridade referencial
+
+### Recursos do banco
+
+| Recurso | Descrição |
+|---------|-----------|
+| **Constraints CHECK** | Impedem nome vazio e quantidade menor ou igual a zero |
+| **Índices** | Em `categoria_id` (chave estrangeira) e `data_validade` (usada em ordenação e filtros) |
+| **Auditoria** | Coluna `atualizado_em` preenchida automaticamente por trigger a cada alteração |
+| **View `vw_alimentos_status`** | Calcula `dias_para_vencer` e `status` (`vencido` / `atencao` / `em_dia`) na própria camada de dados |
+
+A view centraliza a regra de negócio do vencimento: tanto a listagem quanto o resumo de alertas consomem esse cálculo pronto, em vez de duplicá-lo no backend e no app.
 
 A documentação completa (MER, DER, scripts DDL e exemplos de consultas) está na pasta `docs/`.
 
@@ -118,6 +129,17 @@ const API_URL = 'http://localhost:3000';
 
 > Se o backend estiver rodando em outra máquina da rede, substitua `localhost` pelo IPv4 daquele computador (obtido com `ipconfig` no Windows). Nos laboratórios, o IP muda a cada sessão.
 
+### 5. Preparar o banco (apenas na primeira vez)
+
+```bash
+cd backend
+node config/init.js           # cria as tabelas
+node config/migration.js      # normalização: tabela categorias e chave estrangeira
+node config/migration_v2.js   # constraints, índices, auditoria e view de status
+```
+
+> As migrações são idempotentes — podem ser executadas mais de uma vez sem efeitos colaterais.
+
 ---
 
 ## ▶️ Como executar o projeto
@@ -151,6 +173,7 @@ Pressione `w` para abrir no navegador, ou escaneie o QR code com o aplicativo **
 | Método | Rota | Descrição |
 |--------|------|-----------|
 | `GET` | `/alimentos` | Lista todos os alimentos (aceita `?categoria=Nome`) |
+| `GET` | `/alimentos/resumo` | Totais por status, usado no banner de alertas |
 | `GET` | `/alimentos/:id` | Busca um alimento específico |
 | `POST` | `/alimentos` | Cadastra um novo alimento |
 | `PUT` | `/alimentos/:id` | Atualiza um alimento existente |
@@ -179,6 +202,24 @@ Pressione `w` para abrir no navegador, ou escaneie o QR code com o aplicativo **
 ```
 
 > O campo `data_validade` deve seguir o formato `AAAA-MM-DD`.
+
+### Exemplo de resposta
+
+As rotas de listagem retornam os campos calculados pela view:
+
+```json
+{
+  "id": 5,
+  "nome": "Leite Integral",
+  "categoria": "Laticinios",
+  "categoria_icone": "🥛",
+  "quantidade": "1.00",
+  "unidade": "litro",
+  "data_validade": "2026-09-15T03:00:00.000Z",
+  "dias_para_vencer": 2,
+  "status": "atencao"
+}
+```
 
 ---
 
@@ -235,6 +276,8 @@ cd mobile && rm -rf .git && cd ..
 git add .
 ```
 
+**O PowerShell bloqueia a execução do npm:** utilize o Git Bash ou o Prompt de Comando (CMD).
+
 ---
 
 ## 📁 Estrutura do projeto
@@ -243,9 +286,10 @@ git add .
 REFOOD/
 ├── backend/
 │   ├── config/
-│   │   ├── database.js        Conexão com o PostgreSQL
-│   │   ├── init.js            Criação inicial das tabelas
-│   │   └── migration.js       Migração de normalização
+│   │   ├── database.js         Conexão com o PostgreSQL
+│   │   ├── init.js             Criação inicial das tabelas
+│   │   ├── migration.js        Normalização (tabela categorias + FK)
+│   │   └── migration_v2.js     Constraints, índices, auditoria e view
 │   ├── controllers/
 │   │   ├── alimentosController.js
 │   │   └── categoriasController.js
@@ -255,12 +299,12 @@ REFOOD/
 │   └── server.js
 ├── mobile/
 │   ├── app/
-│   │   ├── index.tsx          Listagem de alimentos
-│   │   ├── cadastrar.tsx      Cadastro de alimento
-│   │   ├── [id].tsx           Edição e exclusão
+│   │   ├── index.tsx           Listagem, banner de alertas e agrupamento
+│   │   ├── cadastrar.tsx       Cadastro de alimento
+│   │   ├── [id].tsx            Edição e exclusão
 │   │   └── _layout.tsx
 │   └── services/
-│       └── api.js             Comunicação com a API
+│       └── api.js              Comunicação com a API
 ├── docs/
 │   ├── ReFood_MER_DER.docx
 │   ├── ReFood_ProductBacklog.xlsx
