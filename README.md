@@ -52,8 +52,7 @@ Sprint de 1 mês · 23 Story Points
 | US-03 | Editar alimento | ✅ Concluído |
 | US-04 | Excluir alimento | ✅ Concluído |
 | US-05 | Atualizar data de validade | ✅ Concluído |
-| US-06 | Alertas visuais de vencimento | 🔄 Em andamento |
-
+| US-06 | Alertas visuais de vencimento | ✅ Concluído |
 ---
 
 ## 🗄️ Modelagem do Banco
