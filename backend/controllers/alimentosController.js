@@ -1,21 +1,7 @@
 const pool = require('../config/database');
 
-// Query base com JOIN para trazer o nome da categoria
-const SELECT_BASE = `
-  SELECT
-    a.id,
-    a.nome,
-    a.categoria_id,
-    c.nome AS categoria,
-    c.icone AS categoria_icone,
-    a.quantidade,
-    a.unidade,
-    a.data_validade,
-    a.local_armazenamento,
-    a.criado_em
-  FROM alimentos a
-  INNER JOIN categorias c ON a.categoria_id = c.id
-`;
+// View que já traz categoria, dias_para_vencer e status calculados
+const SELECT_BASE = 'SELECT * FROM vw_alimentos_status';
 
 // Listar todos os alimentos
 exports.listar = async (req, res) => {
@@ -25,14 +11,32 @@ exports.listar = async (req, res) => {
     const params = [];
 
     if (categoria) {
-      query += ' WHERE c.nome = $1';
+      query += ' WHERE categoria = $1';
       params.push(categoria);
     }
 
-    query += ' ORDER BY a.data_validade ASC';
+    query += ' ORDER BY data_validade ASC';
 
     const result = await pool.query(query, params);
     res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ erro: err.message });
+  }
+};
+
+// Resumo de status para o banner de alertas
+exports.resumo = async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT status, COUNT(*)::int AS total
+      FROM vw_alimentos_status
+      GROUP BY status
+    `);
+
+    const resumo = { vencido: 0, atencao: 0, em_dia: 0 };
+    result.rows.forEach(r => { resumo[r.status] = r.total; });
+
+    res.json(resumo);
   } catch (err) {
     res.status(500).json({ erro: err.message });
   }
@@ -42,7 +46,7 @@ exports.listar = async (req, res) => {
 exports.buscarPorId = async (req, res) => {
   try {
     const { id } = req.params;
-    const result = await pool.query(SELECT_BASE + ' WHERE a.id = $1', [id]);
+    const result = await pool.query(SELECT_BASE + ' WHERE id = $1', [id]);
 
     if (result.rows.length === 0) {
       return res.status(404).json({ erro: 'Alimento não encontrado' });
@@ -83,7 +87,7 @@ exports.criar = async (req, res) => {
       [nome, catId, quantidade, unidade, data_validade, local_armazenamento]
     );
 
-    const novo = await pool.query(SELECT_BASE + ' WHERE a.id = $1', [result.rows[0].id]);
+    const novo = await pool.query(SELECT_BASE + ' WHERE id = $1', [result.rows[0].id]);
     res.status(201).json(novo.rows[0]);
   } catch (err) {
     res.status(500).json({ erro: err.message });
@@ -113,7 +117,7 @@ exports.atualizar = async (req, res) => {
       return res.status(404).json({ erro: 'Alimento não encontrado' });
     }
 
-    const atualizado = await pool.query(SELECT_BASE + ' WHERE a.id = $1', [id]);
+    const atualizado = await pool.query(SELECT_BASE + ' WHERE id = $1', [id]);
     res.json(atualizado.rows[0]);
   } catch (err) {
     res.status(500).json({ erro: err.message });

@@ -3,6 +3,7 @@ const router = express.Router();
 const controller = require('../controllers/alimentosController');
 
 router.get('/', controller.listar);
+router.get('/resumo', controller.resumo);
 router.get('/:id', controller.buscarPorId);
 router.post('/', controller.criar);
 router.put('/:id', controller.atualizar);

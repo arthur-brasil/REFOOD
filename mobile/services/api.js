@@ -37,3 +37,7 @@ export const deletarAlimento = async (id) => {
   });
   return res.json();
 };
+export const buscarResumo = async () => {
+  const res = await fetch(`${API_URL}/alimentos/resumo`);
+  return res.json();
+};
