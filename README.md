@@ -27,6 +27,7 @@ O projeto nasceu da constatação de que grande parte do desperdício doméstico
 | Backend | Node.js + Express |
 | Banco de dados | PostgreSQL (hospedado no Neon) |
 | Versionamento | Git + GitHub |
+| Testes | Jest + Supertest (backend) |
 
 ---
 
@@ -64,7 +65,7 @@ Ainda não formalizada com a professora — trabalho adiantado pela equipe. IDs 
 | US-13 | Registrar alimento como consumido/descartado (histórico) | 3 | 🔄 Em andamento (backend) |
 | US-09 | Notificações push de vencimento | 5 | ⏳ Planejada |
 | US-11 | Lista de compras inteligente | 5 | ⏳ Planejada |
-| US-15 | Testes automatizados do backend | 5 | ⏳ Planejada |
+| US-15 | Testes automatizados do backend | 5 | ✅ Concluído (backend) |
 
 Total: 26 SP. (US-10, configurar antecedência de notificação, fica adiada pra depois da US-09 estar funcionando.)
 
@@ -249,6 +250,25 @@ As rotas de listagem retornam os campos calculados pela view:
 
 ---
 
+## 🧪 Testes automatizados
+
+O backend tem uma suíte de testes de integração leve (Jest + Supertest) cobrindo os controllers de alimentos, categorias e relatórios.
+
+```bash
+cd backend
+npm test
+```
+
+**Estratégia:** os testes não se conectam ao banco de verdade — `backend/tests/helpers/mockPool.js` substitui o pool do `pg` por um mock (`jest.mock('../config/database', ...)`), então rodam offline, rápido, e sem risco de mexer em dados reais do Neon. `server.js` exporta o `app` do Express e só chama `app.listen` quando executado diretamente (`node server.js`), permitindo que o Supertest suba as rotas sem abrir porta.
+
+O que está coberto:
+
+- **alimentos**: listagem (com e sem filtro de categoria), resumo de status, busca por id, validações de cadastro e edição, e a exclusão transacional (grava em `historico_alimentos` antes do `DELETE`, incluindo o rollback em caso de erro no meio da transação).
+- **categorias**: CRUD completo, incluindo os erros específicos do Postgres tratados no controller (nome duplicado — `23505` — e exclusão bloqueada por alimento vinculado — `23503`).
+- **relatórios**: formato da resposta de `/relatorios/desperdicio` (conversão de tipos) e os limites de `/relatorios/historico` (padrão 50, customizável, teto de 200).
+
+---
+
 ## 🔄 Como atualizar o GitHub
 
 Siga sempre esta ordem para evitar conflitos:
@@ -325,6 +345,12 @@ REFOOD/
 │   │   ├── alimentos.js
 │   │   ├── categorias.js
 │   │   └── relatorios.js
+│   ├── tests/
+│   │   ├── helpers/
+│   │   │   └── mockPool.js     Mock do pool do pg (sem conexão real)
+│   │   ├── alimentos.test.js
+│   │   ├── categorias.test.js
+│   │   └── relatorios.test.js
 │   └── server.js
 ├── mobile/
 │   ├── app/
