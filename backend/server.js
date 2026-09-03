@@ -4,6 +4,7 @@ require('dotenv').config();
 const pool = require('./config/database');
 const alimentosRoutes = require('./routes/alimentos');
 const categoriasRoutes = require('./routes/categorias');
+const relatoriosRoutes = require('./routes/relatorios');
 
 const app = express();
 
@@ -16,6 +17,7 @@ app.get('/', (req, res) => {
 
 app.use('/alimentos', alimentosRoutes);
 app.use('/categorias', categoriasRoutes);
+app.use('/relatorios', relatoriosRoutes);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {

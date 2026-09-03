@@ -54,6 +54,20 @@ Sprint de 1 mês · 23 Story Points · **Concluído**
 | US-05 | Atualizar data de validade | 2 | ✅ Concluído |
 | US-06 | Alertas visuais de vencimento | 3 | ✅ Concluído |
 
+### Sprint 2 (planejamento)
+
+Ainda não formalizada com a professora — trabalho adiantado pela equipe. IDs reaproveitados do `ReFood_ProductBacklog.xlsx` original (a equipe de 4 pessoas já havia planejado essas stories antes da redução de escopo; US-01/02/03 de autenticação e US-14 foram marcadas como fora de escopo). Detalhes em `docs/ReFood_ProductBacklog.xlsx` e `docs/ReFood_SprintBacklog.xlsx` (aba Sprint 2).
+
+| ID | User Story | SP | Status |
+|----|-----------|----|--------|
+| US-12 | Relatório de desperdício por categoria | 8 | 🔄 Em andamento (backend) |
+| US-13 | Registrar alimento como consumido/descartado (histórico) | 3 | 🔄 Em andamento (backend) |
+| US-09 | Notificações push de vencimento | 5 | ⏳ Planejada |
+| US-11 | Lista de compras inteligente | 5 | ⏳ Planejada |
+| US-15 | Testes automatizados do backend | 5 | ⏳ Planejada |
+
+Total: 26 SP. (US-10, configurar antecedência de notificação, fica adiada pra depois da US-09 estar funcionando.)
+
 ---
 
 ## 🗄️ Modelagem do Banco
@@ -67,17 +81,19 @@ CATEGORIAS ||--o{ ALIMENTOS : classifica
 - Uma **categoria** classifica zero ou muitos **alimentos**
 - Um **alimento** pertence a exatamente uma **categoria**
 - A restrição `ON DELETE RESTRICT` impede a exclusão de categorias que possuam alimentos vinculados, garantindo integridade referencial
+- Ao ser removido de `alimentos` (consumido ou descartado), o item é primeiro copiado pra `historico_alimentos` — um log append-only que alimenta o relatório de desperdício (US-12/US-13). `categoria_id` nessa tabela aceita `NULL` (`ON DELETE SET NULL`), e o nome da categoria também é gravado à parte (`categoria_nome`), pra o histórico sobreviver mesmo se a categoria for excluída ou renomeada depois
 
 ### Recursos do banco
 
 | Recurso | Descrição |
 |---------|-----------|
-| **Constraints CHECK** | Impedem nome vazio e quantidade menor ou igual a zero |
-| **Índices** | Em `categoria_id` (chave estrangeira) e `data_validade` (usada em ordenação e filtros) |
+| **Constraints CHECK** | Impedem nome vazio e quantidade menor ou igual a zero; `historico_alimentos.status_saida` só aceita `consumido` ou `descartado` |
+| **Índices** | Em `categoria_id` e `data_validade` (alimentos); em `status_saida`, `categoria_id` e `data_saida` (historico_alimentos) |
 | **Auditoria** | Coluna `atualizado_em` preenchida automaticamente por trigger a cada alteração |
 | **View `vw_alimentos_status`** | Calcula `dias_para_vencer` e `status` (`vencido` / `atencao` / `em_dia`) na própria camada de dados |
+| **View `vw_desperdicio_por_categoria`** | Agrega `historico_alimentos` por categoria (total consumido, total descartado, quantidade descartada) — base do endpoint de relatório |
 
-A view centraliza a regra de negócio do vencimento: tanto a listagem quanto o resumo de alertas consomem esse cálculo pronto, em vez de duplicá-lo no backend e no app.
+As views centralizam as regras de negócio: tanto o app quanto o backend consomem esses cálculos prontos, em vez de duplicá-los.
 
 A documentação completa (MER, DER, scripts DDL e exemplos de consultas) está na pasta `docs/`.
 
@@ -136,6 +152,7 @@ cd backend
 node config/init.js           # cria as tabelas
 node config/migration.js      # normalização: tabela categorias e chave estrangeira
 node config/migration_v2.js   # constraints, índices, auditoria e view de status
+node config/migration_v3.js   # historico_alimentos e view de desperdício por categoria
 ```
 
 > As migrações são idempotentes — podem ser executadas mais de uma vez sem efeitos colaterais.
@@ -187,6 +204,15 @@ Pressione `w` para abrir no navegador, ou escaneie o QR code com o aplicativo **
 | `POST` | `/categorias` | Cria uma nova categoria |
 | `PUT` | `/categorias/:id` | Atualiza uma categoria |
 | `DELETE` | `/categorias/:id` | Remove uma categoria (bloqueado se houver alimentos vinculados) |
+
+### Relatórios
+
+| Método | Rota | Descrição |
+|--------|------|-----------|
+| `GET` | `/relatorios/desperdicio` | Totais consumido/descartado, geral e por categoria |
+| `GET` | `/relatorios/historico?limit=50` | Lista bruta do histórico de saída, mais recentes primeiro (limite máx. 200) |
+
+> `DELETE /alimentos/:id` aceita `{ "status_saida": "consumido" | "descartado" }` no corpo da requisição — grava uma cópia em `historico_alimentos` antes de excluir. Enquanto o mobile não envia esse campo (US-13 ainda não tem a tela de confirmação), o backend assume `"descartado"` como padrão.
 
 ### Exemplo de payload
 
@@ -289,13 +315,16 @@ REFOOD/
 │   │   ├── database.js         Conexão com o PostgreSQL
 │   │   ├── init.js             Criação inicial das tabelas
 │   │   ├── migration.js        Normalização (tabela categorias + FK)
-│   │   └── migration_v2.js     Constraints, índices, auditoria e view
+│   │   ├── migration_v2.js     Constraints, índices, auditoria e view
+│   │   └── migration_v3.js     historico_alimentos + view de desperdício
 │   ├── controllers/
 │   │   ├── alimentosController.js
-│   │   └── categoriasController.js
+│   │   ├── categoriasController.js
+│   │   └── relatoriosController.js
 │   ├── routes/
 │   │   ├── alimentos.js
-│   │   └── categorias.js
+│   │   ├── categorias.js
+│   │   └── relatorios.js
 │   └── server.js
 ├── mobile/
 │   ├── app/

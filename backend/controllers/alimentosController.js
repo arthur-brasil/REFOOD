@@ -125,17 +125,53 @@ exports.atualizar = async (req, res) => {
 };
 
 // Excluir alimento
+//
+// Antes de remover, grava uma cópia em historico_alimentos com o motivo da
+// saída (consumido ou descartado). O mobile ainda não envia status_saida no
+// corpo da requisição (isso fica pro Lucas implementar na tela de exclusão,
+// com a confirmação "Consumido ou Descartado?"); até lá, o backend assume
+// 'descartado' como padrão pra não quebrar a exclusão que já está em uso.
 exports.deletar = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const result = await pool.query('DELETE FROM alimentos WHERE id = $1 RETURNING *', [id]);
+  const { id } = req.params;
+  const { status_saida } = req.body || {};
+  const status = ['consumido', 'descartado'].includes(status_saida) ? status_saida : 'descartado';
 
-    if (result.rows.length === 0) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const alimento = await client.query(
+      `SELECT a.*, c.nome AS categoria_nome
+       FROM alimentos a
+       INNER JOIN categorias c ON a.categoria_id = c.id
+       WHERE a.id = $1`,
+      [id]
+    );
+
+    if (alimento.rows.length === 0) {
+      await client.query('ROLLBACK');
       return res.status(404).json({ erro: 'Alimento não encontrado' });
     }
 
-    res.json({ mensagem: 'Alimento excluído com sucesso' });
+    const a = alimento.rows[0];
+
+    await client.query(
+      `INSERT INTO historico_alimentos
+         (alimento_id, nome, categoria_id, categoria_nome, quantidade, unidade,
+          data_validade, local_armazenamento, status_saida, criado_em)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+      [a.id, a.nome, a.categoria_id, a.categoria_nome, a.quantidade, a.unidade,
+       a.data_validade, a.local_armazenamento, status, a.criado_em]
+    );
+
+    await client.query('DELETE FROM alimentos WHERE id = $1', [id]);
+
+    await client.query('COMMIT');
+    res.json({ mensagem: 'Alimento excluído com sucesso', status_saida: status });
   } catch (err) {
+    await client.query('ROLLBACK');
     res.status(500).json({ erro: err.message });
+  } finally {
+    client.release();
   }
 };
