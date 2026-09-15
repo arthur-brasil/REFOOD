@@ -64,7 +64,7 @@ Ainda não formalizada com a professora — trabalho adiantado pela equipe. IDs 
 | US-12 | Relatório de desperdício por categoria | 8 | 🔄 Em andamento (backend) |
 | US-13 | Registrar alimento como consumido/descartado (histórico) | 3 | 🔄 Em andamento (backend) |
 | US-09 | Notificações push de vencimento | 5 | ⏳ Planejada |
-| US-11 | Lista de compras inteligente | 5 | ⏳ Planejada |
+| US-11 | Lista de compras inteligente | 5 | 🔄 Em andamento (backend) |
 | US-15 | Testes automatizados do backend | 5 | ✅ Concluído (backend) |
 
 Total: 26 SP. (US-10, configurar antecedência de notificação, fica adiada pra depois da US-09 estar funcionando.)
@@ -83,16 +83,18 @@ CATEGORIAS ||--o{ ALIMENTOS : classifica
 - Um **alimento** pertence a exatamente uma **categoria**
 - A restrição `ON DELETE RESTRICT` impede a exclusão de categorias que possuam alimentos vinculados, garantindo integridade referencial
 - Ao ser removido de `alimentos` (consumido ou descartado), o item é primeiro copiado pra `historico_alimentos` — um log append-only que alimenta o relatório de desperdício (US-12/US-13). `categoria_id` nessa tabela aceita `NULL` (`ON DELETE SET NULL`), e o nome da categoria também é gravado à parte (`categoria_nome`), pra o histórico sobreviver mesmo se a categoria for excluída ou renomeada depois
+- `lista_compras` (US-11) é independente das demais tabelas — guarda os itens adicionados manualmente ou aceitos a partir de uma sugestão automática, com marcação de comprado
 
 ### Recursos do banco
 
 | Recurso | Descrição |
 |---------|-----------|
-| **Constraints CHECK** | Impedem nome vazio e quantidade menor ou igual a zero; `historico_alimentos.status_saida` só aceita `consumido` ou `descartado` |
-| **Índices** | Em `categoria_id` e `data_validade` (alimentos); em `status_saida`, `categoria_id` e `data_saida` (historico_alimentos) |
+| **Constraints CHECK** | Impedem nome vazio e quantidade menor ou igual a zero; `historico_alimentos.status_saida` só aceita `consumido` ou `descartado`; `lista_compras.origem` só aceita `manual` ou `sugestao` |
+| **Índices** | Em `categoria_id` e `data_validade` (alimentos); em `status_saida`, `categoria_id` e `data_saida` (historico_alimentos); em `comprado` (lista_compras) |
 | **Auditoria** | Coluna `atualizado_em` preenchida automaticamente por trigger a cada alteração |
 | **View `vw_alimentos_status`** | Calcula `dias_para_vencer` e `status` (`vencido` / `atencao` / `em_dia`) na própria camada de dados |
 | **View `vw_desperdicio_por_categoria`** | Agrega `historico_alimentos` por categoria (total consumido, total descartado, quantidade descartada) — base do endpoint de relatório |
+| **View `vw_sugestao_compras`** | Cruza `historico_alimentos` (últimos 60 dias) com o estoque atual e a lista de compras pendente — sugere itens que saíram da despensa e ainda não foram repostos nem adicionados à lista |
 
 As views centralizam as regras de negócio: tanto o app quanto o backend consomem esses cálculos prontos, em vez de duplicá-los.
 
@@ -154,6 +156,7 @@ node config/init.js           # cria as tabelas
 node config/migration.js      # normalização: tabela categorias e chave estrangeira
 node config/migration_v2.js   # constraints, índices, auditoria e view de status
 node config/migration_v3.js   # historico_alimentos e view de desperdício por categoria
+node config/migration_v4.js   # lista_compras e view de sugestão automática
 ```
 
 > As migrações são idempotentes — podem ser executadas mais de uma vez sem efeitos colaterais.
@@ -213,6 +216,20 @@ Pressione `w` para abrir no navegador, ou escaneie o QR code com o aplicativo **
 | `GET` | `/relatorios/desperdicio` | Totais consumido/descartado, geral e por categoria |
 | `GET` | `/relatorios/historico?limit=50` | Lista bruta do histórico de saída, mais recentes primeiro (limite máx. 200) |
 
+### Lista de compras
+
+| Método | Rota | Descrição |
+|--------|------|-----------|
+| `GET` | `/lista-compras` | Lista os itens (aceita `?comprado=true` ou `?comprado=false`) |
+| `GET` | `/lista-compras/sugestoes` | Sugestões automáticas com base no histórico de consumo, sem persistir nada |
+| `POST` | `/lista-compras` | Adiciona um item (`origem: "manual"` por padrão, ou `"sugestao"` ao aceitar uma sugestão) |
+| `PUT` | `/lista-compras/:id` | Atualiza um item, incluindo marcar/desmarcar como comprado |
+| `DELETE` | `/lista-compras/:id` | Remove um item da lista |
+
+> `POST /lista-compras` espera `{ "nome": "...", "quantidade": 1, "unidade": "kg", "origem": "manual" }` (`quantidade`, `unidade` e `origem` são opcionais).
+
+> `GET /lista-compras/sugestoes` devolve `[{ "nome": "...", "categoria": "...", "total_saidas": 3, "ultima_saida": "..." }]` — itens que saíram da despensa (consumidos ou descartados) nos últimos 60 dias, que não voltaram ao estoque e que ainda não estão pendentes na lista. O mobile decide quais aceitar, criando o item de fato via `POST /lista-compras`.
+
 > `DELETE /alimentos/:id` aceita `{ "status_saida": "consumido" | "descartado" }` no corpo da requisição — grava uma cópia em `historico_alimentos` antes de excluir. Enquanto o mobile não envia esse campo (US-13 ainda não tem a tela de confirmação), o backend assume `"descartado"` como padrão.
 
 ### Exemplo de payload
@@ -252,7 +269,7 @@ As rotas de listagem retornam os campos calculados pela view:
 
 ## 🧪 Testes automatizados
 
-O backend tem uma suíte de testes de integração leve (Jest + Supertest) cobrindo os controllers de alimentos, categorias e relatórios.
+O backend tem uma suíte de testes de integração leve (Jest + Supertest) cobrindo os controllers de alimentos, categorias, relatórios e lista de compras.
 
 ```bash
 cd backend
@@ -266,6 +283,7 @@ O que está coberto:
 - **alimentos**: listagem (com e sem filtro de categoria), resumo de status, busca por id, validações de cadastro e edição, e a exclusão transacional (grava em `historico_alimentos` antes do `DELETE`, incluindo o rollback em caso de erro no meio da transação).
 - **categorias**: CRUD completo, incluindo os erros específicos do Postgres tratados no controller (nome duplicado — `23505` — e exclusão bloqueada por alimento vinculado — `23503`).
 - **relatórios**: formato da resposta de `/relatorios/desperdicio` (conversão de tipos) e os limites de `/relatorios/historico` (padrão 50, customizável, teto de 200).
+- **lista de compras**: listagem com e sem filtro de `comprado`, sugestões automáticas (conversão de tipos e erro da view), criação (com validação de nome e normalização de `origem`), atualização (incluindo o 404) e remoção.
 
 ---
 
@@ -336,21 +354,25 @@ REFOOD/
 │   │   ├── init.js             Criação inicial das tabelas
 │   │   ├── migration.js        Normalização (tabela categorias + FK)
 │   │   ├── migration_v2.js     Constraints, índices, auditoria e view
-│   │   └── migration_v3.js     historico_alimentos + view de desperdício
+│   │   ├── migration_v3.js     historico_alimentos + view de desperdício
+│   │   └── migration_v4.js     lista_compras + view de sugestão automática
 │   ├── controllers/
 │   │   ├── alimentosController.js
 │   │   ├── categoriasController.js
-│   │   └── relatoriosController.js
+│   │   ├── relatoriosController.js
+│   │   └── listaComprasController.js
 │   ├── routes/
 │   │   ├── alimentos.js
 │   │   ├── categorias.js
-│   │   └── relatorios.js
+│   │   ├── relatorios.js
+│   │   └── listaCompras.js
 │   ├── tests/
 │   │   ├── helpers/
 │   │   │   └── mockPool.js     Mock do pool do pg (sem conexão real)
 │   │   ├── alimentos.test.js
 │   │   ├── categorias.test.js
-│   │   └── relatorios.test.js
+│   │   ├── relatorios.test.js
+│   │   └── listaCompras.test.js
 │   └── server.js
 ├── mobile/
 │   ├── app/

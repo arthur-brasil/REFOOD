@@ -4,6 +4,7 @@ require('dotenv').config();
 const alimentosRoutes = require('./routes/alimentos');
 const categoriasRoutes = require('./routes/categorias');
 const relatoriosRoutes = require('./routes/relatorios');
+const listaComprasRoutes = require('./routes/listaCompras');
 
 const app = express();
 
@@ -17,6 +18,7 @@ app.get('/', (req, res) => {
 app.use('/alimentos', alimentosRoutes);
 app.use('/categorias', categoriasRoutes);
 app.use('/relatorios', relatoriosRoutes);
+app.use('/lista-compras', listaComprasRoutes);
 
 const PORT = process.env.PORT || 3000;
 
