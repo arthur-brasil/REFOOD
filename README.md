@@ -55,19 +55,19 @@ Sprint de 1 mês · 23 Story Points · **Concluído**
 | US-05 | Atualizar data de validade | 2 | ✅ Concluído |
 | US-06 | Alertas visuais de vencimento | 3 | ✅ Concluído |
 
-### Sprint 2 (planejamento)
+### Sprint 2 — ✅ Concluída (26 SP)
 
 Ainda não formalizada com a professora — trabalho adiantado pela equipe. IDs reaproveitados do `ReFood_ProductBacklog.xlsx` original (a equipe de 4 pessoas já havia planejado essas stories antes da redução de escopo; US-01/02/03 de autenticação e US-14 foram marcadas como fora de escopo). Detalhes em `docs/ReFood_ProductBacklog.xlsx` e `docs/ReFood_SprintBacklog.xlsx` (aba Sprint 2).
 
 | ID | User Story | SP | Status |
 |----|-----------|----|--------|
-| US-12 | Relatório de desperdício por categoria | 8 | 🔄 Em andamento (backend) |
-| US-13 | Registrar alimento como consumido/descartado (histórico) | 3 | 🔄 Em andamento (backend) |
-| US-09 | Notificações push de vencimento | 5 | ⏳ Planejada |
-| US-11 | Lista de compras inteligente | 5 | 🔄 Em andamento (backend) |
-| US-15 | Testes automatizados do backend | 5 | ✅ Concluído (backend) |
+| US-12 | Relatório de desperdício por categoria | 8 | ✅ Concluído |
+| US-13 | Registrar alimento como consumido/descartado (histórico) | 3 | ✅ Concluído |
+| US-09 | Notificações push de vencimento | 5 | ✅ Concluído (MVP, sem antecedência configurável) |
+| US-11 | Lista de compras inteligente | 5 | ✅ Concluído |
+| US-15 | Testes automatizados do backend | 5 | ✅ Concluído |
 
-Total: 26 SP. (US-10, configurar antecedência de notificação, fica adiada pra depois da US-09 estar funcionando.)
+Total: 26 SP. (US-10, configurar antecedência de notificação de 1 a 7 dias, fica pra uma próxima sprint — hoje o prazo é fixo em 3 dias.)
 
 ---
 
@@ -376,12 +376,15 @@ REFOOD/
 │   └── server.js
 ├── mobile/
 │   ├── app/
-│   │   ├── index.tsx           Listagem, banner de alertas e agrupamento
-│   │   ├── cadastrar.tsx       Cadastro de alimento
-│   │   ├── [id].tsx            Edição e exclusão
+│   │   ├── index.tsx           Listagem, banner de alertas, agrupamento e atalhos
+│   │   ├── cadastrar.tsx       Cadastro de alimento (agenda notificação de vencimento)
+│   │   ├── [id].tsx            Edição e exclusão (modal consumido/descartado)
+│   │   ├── lista-compras.tsx   Lista de compras + sugestões automáticas (US-11)
+│   │   ├── relatorio.tsx       Relatório de desperdício por categoria (US-12)
 │   │   └── _layout.tsx
 │   └── services/
-│       └── api.js              Comunicação com a API
+│       ├── api.js              Comunicação com a API
+│       └── notificacoes.js     Notificações locais de vencimento (US-09, expo-notifications)
 ├── docs/
 │   ├── ReFood_MER_DER.docx
 │   ├── ReFood_ProductBacklog.xlsx

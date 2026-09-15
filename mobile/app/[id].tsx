@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { buscarAlimento, atualizarAlimento, deletarAlimento } from '../services/api';
+import { agendarNotificacaoVencimento, cancelarNotificacao } from '../services/notificacoes';
 
 const CATEGORIAS = ['Laticinios', 'Carnes', 'Vegetais', 'Frutas', 'Paes', 'Enlatados'];
 const UNIDADES = ['unidade', 'litro', 'kg', 'gramas', 'pacote'];
@@ -68,6 +69,7 @@ export default function Detalhe() {
         return;
       }
 
+      await agendarNotificacaoVencimento(id, nome.trim(), dataValidade);
       router.back();
     } catch (err) {
       setErro('Não foi possível salvar as alterações');
@@ -75,9 +77,10 @@ export default function Detalhe() {
     setSalvando(false);
   };
 
-  const excluir = async () => {
+  const excluir = async (statusSaida) => {
     try {
-      await deletarAlimento(id);
+      await deletarAlimento(id, statusSaida);
+      await cancelarNotificacao(id);
       router.back();
     } catch (err) {
       setErro('Não foi possível excluir o alimento');
@@ -198,16 +201,19 @@ export default function Detalhe() {
         ) : (
           <View style={styles.confirmacao}>
             <Text style={styles.confirmacaoTexto}>
-              Tem certeza? Esta ação não pode ser desfeita.
+              O que aconteceu com esse alimento? Isso entra no seu relatório de desperdício.
             </Text>
             <View style={styles.confirmacaoBotoes}>
-              <TouchableOpacity style={styles.btnCancelar} onPress={() => setConfirmando(false)}>
-                <Text style={styles.btnCancelarTexto}>Cancelar</Text>
+              <TouchableOpacity style={styles.btnConsumido} onPress={() => excluir('consumido')}>
+                <Text style={styles.btnConsumidoTexto}>Consumido</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.btnConfirmar} onPress={excluir}>
-                <Text style={styles.btnConfirmarTexto}>Sim, excluir</Text>
+              <TouchableOpacity style={styles.btnConfirmar} onPress={() => excluir('descartado')}>
+                <Text style={styles.btnConfirmarTexto}>Descartado</Text>
               </TouchableOpacity>
             </View>
+            <TouchableOpacity style={styles.btnCancelar} onPress={() => setConfirmando(false)}>
+              <Text style={styles.btnCancelarTexto}>Cancelar</Text>
+            </TouchableOpacity>
           </View>
         )}
       </ScrollView>
@@ -318,6 +324,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   btnCancelarTexto: { color: '#4A6358', fontSize: 14, fontWeight: '600' },
+  btnConsumido: {
+    flex: 1,
+    backgroundColor: '#2D6A4F',
+    borderRadius: 10,
+    padding: 12,
+    alignItems: 'center',
+  },
+  btnConsumidoTexto: { color: '#FFFFFF', fontSize: 14, fontWeight: '600' },
   btnConfirmar: {
     flex: 1,
     backgroundColor: '#A32D2D',

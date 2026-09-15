@@ -3,6 +3,7 @@ import { View, Text, SectionList, StyleSheet, TouchableOpacity, ActivityIndicato
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback } from 'react';
 import { listarAlimentos, buscarResumo } from '../services/api';
+import { pedirPermissao } from '../services/notificacoes';
 
 const CATEGORIAS = ['Todos', 'Laticinios', 'Carnes', 'Vegetais', 'Frutas', 'Paes', 'Enlatados'];
 
@@ -28,6 +29,11 @@ export default function Home() {
   useEffect(() => {
     carregar();
   }, [filtro]);
+
+  // Pede permissão de notificação uma vez, na primeira vez que a Home monta
+  useEffect(() => {
+    pedirPermissao();
+  }, []);
 
   // Recarrega ao voltar de outra tela
   useFocusEffect(
@@ -116,6 +122,17 @@ export default function Home() {
         </View>
       )}
 
+      <View style={styles.atalhos}>
+        <TouchableOpacity style={styles.atalho} onPress={() => router.push('/lista-compras')}>
+          <Text style={styles.atalhoEmoji}>🛒</Text>
+          <Text style={styles.atalhoTexto}>Lista de compras</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.atalho} onPress={() => router.push('/relatorio')}>
+          <Text style={styles.atalhoEmoji}>📊</Text>
+          <Text style={styles.atalhoTexto}>Relatório</Text>
+        </TouchableOpacity>
+      </View>
+
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -193,6 +210,21 @@ const styles = StyleSheet.create({
   },
   bannerTitulo: { fontSize: 13, fontWeight: '600', color: '#633806' },
   bannerSub: { fontSize: 11, color: '#854F0B', marginTop: 1 },
+  atalhos: { flexDirection: 'row', gap: 10, marginHorizontal: 16, marginTop: 12 },
+  atalho: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#C8E6D4',
+    borderRadius: 12,
+    paddingVertical: 12,
+  },
+  atalhoEmoji: { fontSize: 16 },
+  atalhoTexto: { fontSize: 13, fontWeight: '600', color: '#2D6A4F' },
   chipsContainer: { maxHeight: 56 },
   chipsContent: { paddingHorizontal: 16, paddingVertical: 12 },
   chip: {

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert } from 'react-native';
 import { router } from 'expo-router';
 import { criarAlimento } from '../services/api';
+import { agendarNotificacaoVencimento } from '../services/notificacoes';
 
 const CATEGORIAS = ['Laticinios', 'Carnes', 'Vegetais', 'Frutas', 'Paes', 'Enlatados'];
 const UNIDADES = ['unidade', 'litro', 'kg', 'gramas', 'pacote'];
@@ -28,7 +29,7 @@ export default function Cadastrar() {
 
     setSalvando(true);
     try {
-      await criarAlimento({
+      const novo = await criarAlimento({
         nome: nome.trim(),
         categoria,
         quantidade: parseFloat(quantidade) || 1,
@@ -36,6 +37,9 @@ export default function Cadastrar() {
         data_validade: dataValidade,
         local_armazenamento: local,
       });
+      if (novo?.id) {
+        await agendarNotificacaoVencimento(novo.id, novo.nome, dataValidade);
+      }
       router.back();
     } catch (err) {
       Alert.alert('Erro', 'Não foi possível salvar o alimento');
